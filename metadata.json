@@ -1,0 +1,6 @@
+{
+  "name": "BAILAC · Generador de Firmas Digitales",
+  "description": "Aplicación corporativa para completar datos personales y generar firmas digitales optimizadas con el logo, colores y estilo oficial de Bailac 100 Años, con exportación compatible para Gmail, Outlook y Apple Mail.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
