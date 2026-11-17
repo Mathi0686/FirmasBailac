@@ -3,6 +3,13 @@ export type ImageFormat = 'png' | 'jpeg' | 'webp';
 export type PreviewMode = 'canvas' | 'email-light' | 'email-dark';
 export type QrAction = 'whatsapp' | 'vcard';
 
+export interface CustomLogoConfig {
+  dataUrl: string;
+  fileName: string;
+  width: number;
+  height: number;
+}
+
 export interface SignatureData {
   fullName: string;
   role: string;
@@ -39,13 +46,24 @@ export const BAILAC_COLORS = {
   sloganCyan: '#269BD6',
 } as const;
 
+export const DEFAULT_LOGO_PATH = '/assets/aistudio/logo_bailac_100_3x_3db341dc.png';
+
+export const LOGO_SPECS = {
+  minWidth: 238,
+  minHeight: 139,
+  recommendedWidth: 714,
+  recommendedHeight: 417,
+  aspectRatioLabel: '1.7 : 1 (Horizontal)',
+  maxFileSizeMb: 5,
+} as const;
+
 export const DEFAULT_SIGNATURE_DATA: SignatureData = {
   fullName: 'Nombre Apellido',
   role: 'Cargo',
-  company: 'Bailac SAN Ltda.',
+  company: 'Bailac Argentina SRL',
   email: 'email@bailac.cl',
   phone: '+569 7927 0000',
-  website: 'www.bailac.cl',
+  website: 'bailac.com.ar',
   extraLine: '',
   showEmail: true,
   showPhone: true,
@@ -63,52 +81,3 @@ export const DEFAULT_STYLE_OPTIONS: SignatureStyleOptions = {
   showQr: true,
   qrAction: 'whatsapp',
 };
-
-export const COMPANY_PRESETS = [
-  'Bailac SAN Ltda.',
-  'Bailac Thor Ltda.',
-  'Servicios Mineros Bailac',
-  'Recauchajes Bailac S.A.',
-];
-
-export const EXAMPLE_PROFILES: Array<{ label: string; data: Partial<SignatureData> }> = [
-  {
-    label: 'Plantilla Base',
-    data: {
-      fullName: 'Nombre Apellido',
-      role: 'Cargo',
-      company: 'Bailac SAN Ltda.',
-      email: 'email@bailac.cl',
-      phone: '+569 7927 0000',
-      website: 'www.bailac.cl',
-      extraLine: '',
-      showExtra: false,
-    },
-  },
-  {
-    label: 'Operaciones Mineras',
-    data: {
-      fullName: 'Rodrigo Fuentealba Vega',
-      role: 'Jefe de Operaciones OTR',
-      company: 'Bailac SAN Ltda.',
-      email: 'rfuentealba@bailac.cl',
-      phone: '+569 7927 4810',
-      website: 'www.bailac.cl',
-      extraLine: 'Antofagasta · Faena Escondida',
-      showExtra: false,
-    },
-  },
-  {
-    label: 'Comercial Corporativo',
-    data: {
-      fullName: 'Camila Valdivia Soto',
-      role: 'Ejecutiva Comercial Corporativa',
-      company: 'Bailac Thor Ltda.',
-      email: 'cvaldivia@bailac.cl',
-      phone: '+569 8412 3390',
-      website: 'www.bailac.cl',
-      extraLine: 'Av. Américo Vespucio 2700, Santiago',
-      showExtra: false,
-    },
-  },
-];

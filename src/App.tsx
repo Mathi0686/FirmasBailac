@@ -7,11 +7,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { SignatureForm } from './components/SignatureForm';
 import { SignaturePreviewStage } from './components/SignaturePreviewStage';
-import { HtmlExportView } from './components/HtmlExportView';
 import { InstallGuideView } from './components/InstallGuideView';
 import {
+  CustomLogoConfig,
+  DEFAULT_LOGO_PATH,
   DEFAULT_SIGNATURE_DATA,
   DEFAULT_STYLE_OPTIONS,
+  LOGO_SPECS,
   PreviewMode,
   SignatureData,
   SignatureStyleOptions,
@@ -30,10 +32,11 @@ import {
   generatePlainTextSignature,
 } from './utils/signatureHtml';
 
-type ActiveTab = 'editor' | 'html' | 'guide';
+type ActiveTab = 'editor' | 'guide';
 
-const STORAGE_KEY_DATA = 'bailac_signature_data_v1';
+const STORAGE_KEY_DATA = 'bailac_signature_data_v2';
 const STORAGE_KEY_STYLE = 'bailac_signature_style_v2';
+const STORAGE_KEY_LOGO = 'bailac_signature_custom_logo_v1';
 
 function slugifyFilename(name: string): string {
   const clean = name
@@ -72,9 +75,28 @@ export default function App() {
   const [metrics, setMetrics] = useState<RenderedSignatureMetrics | null>(null);
   const [isRendering, setIsRendering] = useState<boolean>(true);
   const [renderError, setRenderError] = useState<string | null>(null);
-  const [logoDataUrl, setLogoDataUrl] = useState<string>('/assets/bailac-logo.png');
+  const [defaultLogoDataUrl, setDefaultLogoDataUrl] = useState<string>(DEFAULT_LOGO_PATH);
+  const [customLogo, setCustomLogo] = useState<CustomLogoConfig | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_LOGO);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // Ignore storage errors
+    }
+    return null;
+  });
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [copiedState, setCopiedState] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const activeLogoDataUrl = customLogo ? customLogo.dataUrl : defaultLogoDataUrl;
+  const activeLogoDims = useMemo(
+    () =>
+      customLogo
+        ? { width: customLogo.width, height: customLogo.height }
+        : { width: 714, height: 417 },
+    [customLogo]
+  );
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderSeqRef = useRef<number>(0);
@@ -100,7 +122,7 @@ export default function App() {
 
   useEffect(() => {
     getLogoPngDataUrl()
-      .then((url) => setLogoDataUrl(url))
+      .then((url) => setDefaultLogoDataUrl(url))
       .catch(() => {
         // Fallback to relative asset path
       });
@@ -123,6 +145,18 @@ export default function App() {
   }, [styleOptions]);
 
   useEffect(() => {
+    try {
+      if (customLogo) {
+        localStorage.setItem(STORAGE_KEY_LOGO, JSON.stringify(customLogo));
+      } else {
+        localStorage.removeItem(STORAGE_KEY_LOGO);
+      }
+    } catch {
+      // Ignore storage errors if custom image exceeds quota
+    }
+  }, [customLogo]);
+
+  useEffect(() => {
     const seq = ++renderSeqRef.current;
     setIsRendering(true);
     setRenderError(null);
@@ -131,7 +165,12 @@ export default function App() {
       if (!canvasRef.current) {
         canvasRef.current = document.createElement('canvas');
       }
-      renderSignatureCanvas(canvasRef.current, data, styleOptions)
+      renderSignatureCanvas(
+        canvasRef.current,
+        data,
+        styleOptions,
+        customLogo ? customLogo.dataUrl : null
+      )
         .then((res) => {
           if (seq === renderSeqRef.current) {
             setMetrics(res);
@@ -140,14 +179,14 @@ export default function App() {
         })
         .catch(() => {
           if (seq === renderSeqRef.current) {
-            setRenderError('No se pudo cargar el logotipo oficial de Bailac.');
+            setRenderError('No se pudo cargar el logotipo de la firma.');
             setIsRendering(false);
           }
         });
     }, 35);
 
     return () => window.clearTimeout(timer);
-  }, [data, styleOptions]);
+  }, [data, styleOptions, customLogo]);
 
   const showToast = useCallback((msg: string, copiedKey?: string) => {
     setToastMessage(msg);
@@ -188,10 +227,15 @@ export default function App() {
       let pngBlob = metrics.blob;
       if (styleOptions.imageFormat !== 'png') {
         const tempCanvas = document.createElement('canvas');
-        const pngRes = await renderSignatureCanvas(tempCanvas, data, {
-          ...styleOptions,
-          imageFormat: 'png',
-        });
+        const pngRes = await renderSignatureCanvas(
+          tempCanvas,
+          data,
+          {
+            ...styleOptions,
+            imageFormat: 'png',
+          },
+          customLogo ? customLogo.dataUrl : null
+        );
         pngBlob = pngRes.blob;
       }
 
@@ -207,7 +251,7 @@ export default function App() {
       handleDownloadImage();
       showToast('El navegador restringió el portapapeles de imagen; se descargó el archivo.');
     }
-  }, [metrics, styleOptions, data, showToast, handleDownloadImage]);
+  }, [metrics, styleOptions, data, customLogo, showToast, handleDownloadImage]);
 
   const copyRichHtmlFallback = useCallback((html: string) => {
     const container = document.createElement('div');
@@ -256,40 +300,114 @@ export default function App() {
   );
 
   const handleCopyDefaultRichSignature = useCallback(() => {
-    const html = generateHybridEmailHtml(data, styleOptions, logoDataUrl, iconDataUrls, qrDataUrl);
+    const html = generateHybridEmailHtml(
+      data,
+      styleOptions,
+      activeLogoDataUrl,
+      iconDataUrls,
+      qrDataUrl,
+      activeLogoDims
+    );
     const plain = generatePlainTextSignature(data);
     handleCopyRichHtml(html, plain, 'rich');
-  }, [data, styleOptions, logoDataUrl, iconDataUrls, qrDataUrl, handleCopyRichHtml]);
-
-  const handleCopyText = useCallback(
-    async (text: string, key: string) => {
-      try {
-        await navigator.clipboard.writeText(text);
-        showToast('Contenido copiado al portapapeles.', key);
-      } catch {
-        showToast('No se pudo acceder al portapapeles.');
-      }
-    },
-    [showToast]
-  );
+  }, [data, styleOptions, activeLogoDataUrl, iconDataUrls, qrDataUrl, activeLogoDims, handleCopyRichHtml]);
 
   const handleDownloadHtm = useCallback(
     (customInnerHtml?: string) => {
       const inner =
         customInnerHtml ||
-        generateHybridEmailHtml(data, styleOptions, logoDataUrl, iconDataUrls, qrDataUrl);
+        generateHybridEmailHtml(
+          data,
+          styleOptions,
+          activeLogoDataUrl,
+          iconDataUrls,
+          qrDataUrl,
+          activeLogoDims
+        );
       const doc = generateOutlookHtmDocument(inner, data.fullName || 'Bailac');
       const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
       const filename = `firma-bailac-${slugifyFilename(data.fullName)}.htm`;
       triggerDownload(blob, filename);
       showToast(`Archivo Outlook descargado: ${filename}`);
     },
-    [data, styleOptions, logoDataUrl, iconDataUrls, qrDataUrl, triggerDownload, showToast]
+    [data, styleOptions, activeLogoDataUrl, iconDataUrls, qrDataUrl, activeLogoDims, triggerDownload, showToast]
   );
+
+  const handleUploadLogo = useCallback(
+    (file: File) => {
+      setLogoError(null);
+      const maxBytes = LOGO_SPECS.maxFileSizeMb * 1024 * 1024;
+      if (file.size > maxBytes) {
+        setLogoError(`El archivo supera el límite de ${LOGO_SPECS.maxFileSizeMb} MB.`);
+        return;
+      }
+      if (!/^image\/(png|jpeg|webp|svg\+xml)$/i.test(file.type)) {
+        setLogoError('Formato no compatible. Usa PNG, SVG, JPG o WebP.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        if (!result) {
+          setLogoError('No se pudo leer la imagen seleccionada.');
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          const w = img.naturalWidth || 238;
+          const h = img.naturalHeight || 139;
+          // Normalize SVG/oversized uploads to crisp PNG data URL so Outlook/Gmail support it universally
+          if (file.type === 'image/svg+xml' || w > 960) {
+            const scaleDown = w > 960 ? 960 / w : 2;
+            const c = document.createElement('canvas');
+            c.width = Math.round(w * scaleDown);
+            c.height = Math.round(h * scaleDown);
+            const ctx = c.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, c.width, c.height);
+              setCustomLogo({
+                dataUrl: c.toDataURL('image/png'),
+                fileName: file.name,
+                width: w,
+                height: h,
+              });
+              showToast(`Logotipo actualizado: ${file.name}`);
+              return;
+            }
+          }
+          setCustomLogo({
+            dataUrl: result,
+            fileName: file.name,
+            width: w,
+            height: h,
+          });
+          showToast(`Logotipo actualizado: ${file.name}`);
+        };
+        img.onerror = () => {
+          setLogoError('No se pudo decodificar la imagen seleccionada.');
+        };
+        img.src = result;
+      };
+      reader.onerror = () => {
+        setLogoError('Error al leer el archivo de imagen.');
+      };
+      reader.readAsDataURL(file);
+    },
+    [showToast]
+  );
+
+  const handleResetLogo = useCallback(() => {
+    setCustomLogo(null);
+    setLogoError(null);
+    showToast('Logotipo restablecido al oficial BAILAC 100 Años.');
+  }, [showToast]);
 
   const handleReset = useCallback(() => {
     setData(DEFAULT_SIGNATURE_DATA);
     setStyleOptions(DEFAULT_STYLE_OPTIONS);
+    setCustomLogo(null);
+    setLogoError(null);
     showToast('Valores restablecidos a la plantilla oficial.');
   }, [showToast]);
 
@@ -310,7 +428,7 @@ export default function App() {
             }}
             className="text-lg font-bold tracking-tight text-slate-900 font-display whitespace-nowrap shrink-0"
           >
-            BAILAC <span className="text-[#1B4695]">Firmas</span>
+            Bailac Argentina <span className="text-[#1B4695]">Firmas</span>
           </a>
 
           {/* Zone 2: Clean single-line nav links */}
@@ -325,17 +443,6 @@ export default function App() {
               }`}
             >
               Editor y vista previa
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('html')}
-              className={`py-5 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
-                activeTab === 'html'
-                  ? 'border-[#E9540D] text-slate-900'
-                  : 'border-transparent text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Código HTML
             </button>
             <button
               type="button"
@@ -378,8 +485,12 @@ export default function App() {
             <SignatureForm
               data={data}
               styleOptions={styleOptions}
+              customLogo={customLogo}
+              logoError={logoError}
               onChangeData={setData}
               onChangeStyle={setStyleOptions}
+              onUploadLogo={handleUploadLogo}
+              onResetLogo={handleResetLogo}
               onReset={handleReset}
             />
 
@@ -395,25 +506,8 @@ export default function App() {
               onCopyImage={handleCopyImage}
               onCopyRichSignature={handleCopyDefaultRichSignature}
               onDownloadHtm={() => handleDownloadHtm()}
-              onOpenHtmlTab={() => setActiveTab('html')}
             />
           </div>
-        )}
-
-        {activeTab === 'html' && (
-          <HtmlExportView
-            data={data}
-            styleOptions={styleOptions}
-            onChangeStyle={setStyleOptions}
-            metrics={metrics}
-            logoDataUrl={logoDataUrl}
-            iconDataUrls={iconDataUrls}
-            qrDataUrl={qrDataUrl}
-            copiedState={copiedState}
-            onCopyText={handleCopyText}
-            onCopyRichHtml={handleCopyRichHtml}
-            onDownloadHtm={(html) => handleDownloadHtm(html)}
-          />
         )}
 
         {activeTab === 'guide' && <InstallGuideView />}

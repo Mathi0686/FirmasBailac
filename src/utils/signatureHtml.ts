@@ -12,7 +12,7 @@ function escapeHtml(str: string): string {
 
 function normalizeWebsiteHref(url: string): string {
   const trimmed = url.trim();
-  if (!trimmed) return 'https://www.bailac.cl';
+  if (!trimmed) return 'https://bailac.com.ar';
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
 }
@@ -37,7 +37,8 @@ export function generateHybridEmailHtml(
   style: SignatureStyleOptions,
   logoSrc: string,
   icons: EmailIconAssets,
-  qrDataUrl?: string
+  qrDataUrl?: string,
+  logoDims?: { width: number; height: number }
 ): string {
   const name = escapeHtml(data.fullName.trim() || 'Nombre Apellido');
   const role = escapeHtml(data.role.trim());
@@ -80,7 +81,7 @@ export function generateHybridEmailHtml(
         <img src="${icons.email}" width="19" height="19" alt="Correo" style="display:block;border:0;width:19px;height:19px;" />
       </td>
       <td valign="middle" style="font-family:${font};font-size:13px;line-height:19px;padding:3px 0;">
-        <a href="mailto:${escapeHtml(email)}" style="color:${BAILAC_COLORS.emailLinkBlue};text-decoration:underline;">${escapeHtml(email)}</a>
+        <a href="mailto:${escapeHtml(email)}" style="color:${BAILAC_COLORS.emailLinkBlue};text-decoration:none;">${escapeHtml(email)}</a>
       </td>
     </tr>`);
   }
@@ -159,11 +160,17 @@ export function generateHybridEmailHtml(
     </td>`
       : '';
 
+  const targetW = 238;
+  const targetH = 139;
+  const fitRatio = logoDims ? Math.min(targetW / logoDims.width, targetH / logoDims.height) : 1;
+  const htmlLogoW = logoDims ? Math.round(logoDims.width * fitRatio) : targetW;
+  const htmlLogoH = logoDims ? Math.round(logoDims.height * fitRatio) : targetH;
+
   return `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;${bgStyle}font-family:${font};">
   <tr>
-    <td valign="middle" style="padding:10px 18px 10px 8px;">
+    <td width="246" align="center" valign="middle" style="padding:10px 18px 10px 8px;">
       <a href="${escapeHtml(normalizeWebsiteHref(website))}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;border:0;">
-        <img src="${logoSrc}" width="238" height="139" alt="BAILAC 100 Años - Ahorrando Neumáticos, desde 1925" style="display:block;border:0;width:238px;height:139px;" />
+        <img src="${logoSrc}" width="${htmlLogoW}" height="${htmlLogoH}" alt="Logotipo ${company || 'Bailac Argentina SRL'}" style="display:block;border:0;width:${htmlLogoW}px;height:${htmlLogoH}px;" />
       </a>
     </td>
     <td valign="middle" style="padding:10px 14px 10px 4px;">

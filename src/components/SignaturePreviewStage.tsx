@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Check,
-  Code2,
   Copy,
   Download,
   FileCode,
@@ -29,7 +28,6 @@ interface SignaturePreviewStageProps {
   onCopyImage: () => void;
   onCopyRichSignature: () => void;
   onDownloadHtm: () => void;
-  onOpenHtmlTab: () => void;
 }
 
 export const SignaturePreviewStage: React.FC<SignaturePreviewStageProps> = ({
@@ -44,7 +42,6 @@ export const SignaturePreviewStage: React.FC<SignaturePreviewStageProps> = ({
   onCopyImage,
   onCopyRichSignature,
   onDownloadHtm,
-  onOpenHtmlTab,
 }) => {
   const formatLabel =
     styleOptions.imageFormat === 'jpeg'
@@ -312,20 +309,6 @@ export const SignaturePreviewStage: React.FC<SignaturePreviewStageProps> = ({
           >
             <FileCode className="w-4 h-4 shrink-0" />
             Archivo .HTM (Outlook)
-          </button>
-        </div>
-
-        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-          <span>
-            ¿Necesitas el código fuente HTML o versión de texto plano para servidor Exchange?
-          </span>
-          <button
-            type="button"
-            onClick={onOpenHtmlTab}
-            className="inline-flex items-center gap-1.5 font-medium text-[#1B4695] hover:underline whitespace-nowrap shrink-0"
-          >
-            <Code2 className="w-3.5 h-3.5" />
-            Abrir inspector HTML y texto plano
           </button>
         </div>
       </div>

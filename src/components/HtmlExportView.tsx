@@ -15,6 +15,7 @@ interface HtmlExportViewProps {
   onChangeStyle: (updater: (prev: SignatureStyleOptions) => SignatureStyleOptions) => void;
   metrics: RenderedSignatureMetrics | null;
   logoDataUrl: string;
+  logoDims?: { width: number; height: number };
   iconDataUrls: EmailIconAssets;
   qrDataUrl?: string;
   copiedState: string | null;
@@ -31,6 +32,7 @@ export const HtmlExportView: React.FC<HtmlExportViewProps> = ({
   onChangeStyle,
   metrics,
   logoDataUrl,
+  logoDims,
   iconDataUrls,
   qrDataUrl,
   copiedState,
@@ -41,8 +43,16 @@ export const HtmlExportView: React.FC<HtmlExportViewProps> = ({
   const [variant, setVariant] = useState<HtmlVariant>('hybrid');
 
   const hybridHtml = useMemo(
-    () => generateHybridEmailHtml(data, styleOptions, logoDataUrl, iconDataUrls, qrDataUrl),
-    [data, styleOptions, logoDataUrl, iconDataUrls, qrDataUrl]
+    () =>
+      generateHybridEmailHtml(
+        data,
+        styleOptions,
+        logoDataUrl,
+        iconDataUrls,
+        qrDataUrl,
+        logoDims
+      ),
+    [data, styleOptions, logoDataUrl, iconDataUrls, qrDataUrl, logoDims]
   );
 
   const singleImageHtml = useMemo(() => {

@@ -1,20 +1,24 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
+  AlertTriangle,
   Building2,
   Globe,
+  Image as ImageIcon,
   Mail,
   MapPin,
   Phone,
   QrCode,
   RotateCcw,
+  Upload,
   User,
   Briefcase,
 } from 'lucide-react';
 import {
-  COMPANY_PRESETS,
-  EXAMPLE_PROFILES,
+  CustomLogoConfig,
+  DEFAULT_LOGO_PATH,
   ExportScale,
   ImageFormat,
+  LOGO_SPECS,
   QrAction,
   SignatureData,
   SignatureStyleOptions,
@@ -24,25 +28,43 @@ import { getWhatsAppWebLink } from '../utils/qrRenderer';
 interface SignatureFormProps {
   data: SignatureData;
   styleOptions: SignatureStyleOptions;
+  customLogo: CustomLogoConfig | null;
+  logoError: string | null;
   onChangeData: (updater: (prev: SignatureData) => SignatureData) => void;
   onChangeStyle: (updater: (prev: SignatureStyleOptions) => SignatureStyleOptions) => void;
+  onUploadLogo: (file: File) => void;
+  onResetLogo: () => void;
   onReset: () => void;
 }
 
 export const SignatureForm: React.FC<SignatureFormProps> = ({
   data,
   styleOptions,
+  customLogo,
+  logoError,
   onChangeData,
   onChangeStyle,
+  onUploadLogo,
+  onResetLogo,
   onReset,
 }) => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const updateField = <K extends keyof SignatureData>(key: K, value: SignatureData[K]) => {
     onChangeData((prev) => ({ ...prev, [key]: value }));
   };
 
-  const applyProfile = (partial: Partial<SignatureData>) => {
-    onChangeData((prev) => ({ ...prev, ...partial }));
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onUploadLogo(file);
+    }
+    e.target.value = '';
   };
+
+  const isLowResLogo =
+    customLogo !== null &&
+    (customLogo.width < LOGO_SPECS.minWidth || customLogo.height < LOGO_SPECS.minHeight);
 
   return (
     <aside className="w-full lg:w-[410px] xl:w-[430px] shrink-0 bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -65,21 +87,106 @@ export const SignatureForm: React.FC<SignatureFormProps> = ({
         </button>
       </div>
 
-      {/* Quick example profiles */}
-      <div className="px-5 py-3 bg-slate-50/70 border-b border-slate-200">
-        <div className="text-xs font-medium text-slate-500 mb-2">Ejemplos rápidos</div>
-        <div className="flex flex-wrap gap-1.5">
-          {EXAMPLE_PROFILES.map((profile) => (
+      {/* Logo Section: Default BAILAC logo + optional replacement with exact specs */}
+      <div className="p-5 border-b border-slate-200 space-y-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <ImageIcon className="w-4 h-4 text-[#1B4695]" />
+            <span className="text-xs font-semibold text-slate-700">
+              Logotipo de la firma
+            </span>
+          </div>
+          {customLogo && (
             <button
-              key={profile.label}
               type="button"
-              onClick={() => applyProfile(profile.data)}
-              className="px-2.5 py-1 text-xs font-medium bg-white border border-slate-200 text-slate-700 hover:border-[#1B4695] hover:text-[#1B4695] rounded-md transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4695]"
+              onClick={onResetLogo}
+              className="text-xs font-medium text-[#1B4695] hover:underline whitespace-nowrap"
             >
-              {profile.label}
+              Volver al original
             </button>
-          ))}
+          )}
         </div>
+
+        <div className="flex items-center gap-3.5">
+          <div className="w-24 h-14 shrink-0 rounded-lg border border-slate-200 bg-white flex items-center justify-center p-1.5 overflow-hidden">
+            <img
+              src={customLogo ? customLogo.dataUrl : DEFAULT_LOGO_PATH}
+              alt="Vista previa del logotipo activo"
+              className="max-w-full max-h-full object-contain"
+            />
+          </div>
+
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="text-xs font-medium text-slate-800 truncate">
+              {customLogo ? customLogo.fileName : 'Oficial BAILAC 100 Años (Por defecto)'}
+            </div>
+            <div className="text-[11px] text-slate-500 font-mono-tabular">
+              {customLogo
+                ? `${customLogo.width} × ${customLogo.height} px`
+                : '714 × 417 px · PNG 3x oficial'}
+            </div>
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 hover:border-[#1B4695] hover:text-[#1B4695] rounded-md transition-colors whitespace-nowrap"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Cambiar imagen
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Technical specs so uploaded logos render cleanly */}
+        <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-lg text-[11px] text-slate-600 space-y-1 leading-relaxed">
+          <div className="font-semibold text-slate-700">
+            Especificaciones para verse correcta:
+          </div>
+          <div>
+            Tamaño recomendado:{' '}
+            <span className="font-mono-tabular font-medium text-slate-800">
+              {LOGO_SPECS.recommendedWidth} × {LOGO_SPECS.recommendedHeight} px
+            </span>{' '}
+            (mínimo{' '}
+            <span className="font-mono-tabular">
+              {LOGO_SPECS.minWidth} × {LOGO_SPECS.minHeight} px
+            </span>
+            )
+          </div>
+          <div>
+            Proporción ideal:{' '}
+            <span className="font-medium text-slate-800">{LOGO_SPECS.aspectRatioLabel}</span>
+          </div>
+          <div>
+            Formato: <span className="font-medium text-slate-800">PNG, SVG, WebP o JPG</span> con
+            fondo blanco o transparente (máx. {LOGO_SPECS.maxFileSizeMb} MB).
+          </div>
+        </div>
+
+        {isLowResLogo && (
+          <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+            <span>
+              La imagen mide {customLogo.width} × {customLogo.height} px. Se recomienda al menos{' '}
+              {LOGO_SPECS.recommendedWidth} × {LOGO_SPECS.recommendedHeight} px para evitar pérdida
+              de nitidez.
+            </span>
+          </div>
+        )}
+
+        {logoError && (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">
+            {logoError}
+          </div>
+        )}
       </div>
 
       {/* Section 1: Identity */}
@@ -131,25 +238,9 @@ export const SignatureForm: React.FC<SignatureFormProps> = ({
               type="text"
               value={data.company}
               onChange={(e) => updateField('company', e.target.value)}
-              placeholder="Bailac SAN Ltda."
+              placeholder="Bailac Argentina SRL"
               className="w-full pl-9 pr-3 py-2 text-sm text-slate-900 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#1B4695] focus:ring-2 focus:ring-[#1B4695]/15 transition-colors"
             />
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {COMPANY_PRESETS.map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => updateField('company', preset)}
-                className={`px-2 py-0.5 text-[11px] font-medium rounded border transition-colors whitespace-nowrap shrink-0 ${
-                  data.company === preset
-                    ? 'bg-[#1B4695]/8 border-[#1B4695]/40 text-[#1B4695]'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {preset}
-              </button>
-            ))}
           </div>
         </div>
       </div>
@@ -242,7 +333,7 @@ export const SignatureForm: React.FC<SignatureFormProps> = ({
               disabled={!data.showWebsite}
               value={data.website}
               onChange={(e) => updateField('website', e.target.value)}
-              placeholder="www.bailac.cl"
+              placeholder="bailac.com.ar"
               className="w-full pl-9 pr-3 py-2 text-sm text-slate-900 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#1B4695] focus:ring-2 focus:ring-[#1B4695]/15 disabled:bg-slate-50 disabled:text-slate-400 transition-colors"
             />
           </div>

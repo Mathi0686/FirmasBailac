@@ -1,14 +1,27 @@
-import { BAILAC_COLORS, SignatureData, SignatureStyleOptions } from '../types/signature';
+import {
+  BAILAC_COLORS,
+  DEFAULT_LOGO_PATH,
+  SignatureData,
+  SignatureStyleOptions,
+} from '../types/signature';
 import { drawQrCodeBlock } from './qrRenderer';
 
-const LOGO_URL = '/assets/bailac-logo.png';
+const LOGO_URL = DEFAULT_LOGO_PATH;
 
 let cachedLogoRaw: HTMLImageElement | null = null;
-let cachedLogoTransparent: HTMLCanvasElement | null = null;
 let cachedLogoDataUrl: string | null = null;
 let logoLoadPromise: Promise<HTMLImageElement> | null = null;
 
-export function loadBailacLogo(): Promise<HTMLImageElement> {
+export function loadBailacLogo(customSrc?: string | null): Promise<HTMLImageElement> {
+  if (customSrc) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = (err) => reject(err);
+      img.src = customSrc;
+    });
+  }
+
   if (cachedLogoRaw && cachedLogoRaw.complete) {
     return Promise.resolve(cachedLogoRaw);
   }
@@ -31,98 +44,6 @@ export function loadBailacLogo(): Promise<HTMLImageElement> {
   });
 
   return logoLoadPromise;
-}
-
-/**
- * Removes only the outer white background via flood-fill from image edges,
- * preserving the interior white mining truck silhouette and tire accents.
- */
-function getTransparentLogoCanvas(img: HTMLImageElement): HTMLCanvasElement {
-  if (cachedLogoTransparent) {
-    return cachedLogoTransparent;
-  }
-
-  const w = img.naturalWidth || img.width;
-  const h = img.naturalHeight || img.height;
-  const off = document.createElement('canvas');
-  off.width = w;
-  off.height = h;
-  const ctx = off.getContext('2d');
-  if (!ctx) return off;
-
-  ctx.drawImage(img, 0, 0);
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const data = imageData.data;
-  const visited = new Uint8Array(w * h);
-  const queue = new Int32Array(w * h);
-  let head = 0;
-  let tail = 0;
-
-  const isNearWhite = (idx: number) => {
-    const p = idx * 4;
-    return data[p] >= 242 && data[p + 1] >= 242 && data[p + 2] >= 242;
-  };
-
-  // Seed borders
-  for (let x = 0; x < w; x++) {
-    const topIdx = x;
-    if (isNearWhite(topIdx)) {
-      visited[topIdx] = 1;
-      queue[tail++] = topIdx;
-    }
-    const botIdx = (h - 1) * w + x;
-    if (!visited[botIdx] && isNearWhite(botIdx)) {
-      visited[botIdx] = 1;
-      queue[tail++] = botIdx;
-    }
-  }
-  for (let y = 0; y < h; y++) {
-    const leftIdx = y * w;
-    if (!visited[leftIdx] && isNearWhite(leftIdx)) {
-      visited[leftIdx] = 1;
-      queue[tail++] = leftIdx;
-    }
-    const rightIdx = y * w + (w - 1);
-    if (!visited[rightIdx] && isNearWhite(rightIdx)) {
-      visited[rightIdx] = 1;
-      queue[tail++] = rightIdx;
-    }
-  }
-
-  while (head < tail) {
-    const idx = queue[head++];
-    const p = idx * 4;
-    data[p + 3] = 0;
-
-    const x = idx % w;
-    const y = (idx - x) / w;
-
-    const neighbors = [
-      x > 0 ? idx - 1 : -1,
-      x < w - 1 ? idx + 1 : -1,
-      y > 0 ? idx - w : -1,
-      y < h - 1 ? idx + w : -1,
-    ];
-
-    for (let i = 0; i < 4; i++) {
-      const n = neighbors[i];
-      if (n >= 0 && !visited[n]) {
-        const np = n * 4;
-        const lum = (data[np] + data[np + 1] + data[np + 2]) / 3;
-        if (lum >= 240) {
-          visited[n] = 1;
-          queue[tail++] = n;
-        } else if (lum >= 210) {
-          // Soft anti-aliased edge feathering
-          data[np + 3] = Math.round(((255 - lum) / 45) * 255);
-        }
-      }
-    }
-  }
-
-  ctx.putImageData(imageData, 0, 0);
-  cachedLogoTransparent = off;
-  return off;
 }
 
 export async function getLogoPngDataUrl(): Promise<string> {
@@ -271,9 +192,10 @@ const SIGNATURE_FONT_STACK = 'Calibri, "Segoe UI", "DM Sans", Arial, Helvetica, 
 export async function renderSignatureCanvas(
   targetCanvas: HTMLCanvasElement | null,
   data: SignatureData,
-  style: SignatureStyleOptions
+  style: SignatureStyleOptions,
+  customLogoSrc?: string | null
 ): Promise<RenderedSignatureMetrics> {
-  const logoImg = await loadBailacLogo();
+  const logoImg = await loadBailacLogo(customLogoSrc);
 
   // Build visible contact rows
   const contactRows: ContactRowItem[] = [];
@@ -386,8 +308,15 @@ export async function renderSignatureCanvas(
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
-  // Draw BAILAC 100 Años logo
-  ctx.drawImage(logoImg, logoX, logoY, logoW, logoH);
+  // Draw logo centered and aspect-fitted inside the 238x139 official slot
+  const natW = logoImg.naturalWidth || logoW;
+  const natH = logoImg.naturalHeight || logoH;
+  const fitRatio = Math.min(logoW / natW, logoH / natH);
+  const drawLogoW = natW * fitRatio;
+  const drawLogoH = natH * fitRatio;
+  const drawLogoX = logoX + (logoW - drawLogoW) / 2;
+  const drawLogoY = logoY + (logoH - drawLogoH) / 2;
+  ctx.drawImage(logoImg, drawLogoX, drawLogoY, drawLogoW, drawLogoH);
 
   // Draw vertical divider bar alongside contact icons (matching reference image)
   if (contactRows.length > 0) {
@@ -431,12 +360,6 @@ export async function renderSignatureCanvas(
     ctx.fillStyle = row.isEmail ? BAILAC_COLORS.emailLinkBlue : BAILAC_COLORS.textBlue;
     const textY = cy + 4.5;
     ctx.fillText(row.text, contactTextX, textY);
-
-    if (row.isEmail) {
-      const tw = ctx.measureText(row.text).width;
-      ctx.fillStyle = BAILAC_COLORS.emailLinkBlue;
-      ctx.fillRect(contactTextX, textY + 2, tw, 0.9);
-    }
   });
 
   // Draw subtle, compact WhatsApp / vCard QR Code block on the right
